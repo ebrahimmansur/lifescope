@@ -1,6 +1,6 @@
 name: lifescope
 description: Composable application lifecycle management for Flutter. Independent lifecycle subscriptions, ordered async callbacks and coordinated desktop exit handling.
-version: 0.1.0-dev
+version: 0.1.0
 topics:
   - lifecycle
   - app-lifecycle
