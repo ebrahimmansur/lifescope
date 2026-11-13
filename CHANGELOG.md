@@ -1,3 +1,7 @@
+## 0.1.1
+
+- Add notes on reporting bugs and contributing to the README.
+
 ## 0.1.0
 
 First release.
