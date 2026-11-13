@@ -11,5 +11,6 @@ export 'src/lifescope.dart'
         LifecycleCallback,
         LifecycleStateCallback;
 export 'src/subscription.dart' show LifeScopeSubscription;
+export 'src/widgets/exit_guard.dart' show LifeScopeExitGuard;
 export 'src/widgets/listener.dart' show LifeScopeListener;
 export 'src/widgets/provider.dart' show LifeScopeProvider;
