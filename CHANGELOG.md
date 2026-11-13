@@ -1,3 +1,10 @@
+## 0.2.0
+
+- iOS: request extra background time while async onHide/onPause/onDetach
+  callbacks are still running (`extendBackgroundTime`, on by default).
+- Add `LifeScope.exitRequestsSupported`.
+- Document Android and iOS behavior.
+
 ## 0.1.0
 
 - First release.
