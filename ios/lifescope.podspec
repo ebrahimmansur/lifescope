@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.description      = <<-DESC
 Requests extra background time on iOS while lifescope callbacks finish.
                        DESC
-  s.homepage         = 'https://pub.dev/packages/lifescope'
+  s.homepage         = 'https://github.com/ebrahimmansur/lifescope'
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'Ebrahim Mansur' => '' }
   s.source           = { :path => '.' }
