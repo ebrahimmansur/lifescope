@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'exit_coordinator.dart';
 import 'subscription.dart';
 import 'transitions.dart';
+import 'widgets/provider.dart';
 
 /// A callback for a lifecycle event. May be synchronous or asynchronous.
 typedef LifecycleCallback = FutureOr<void> Function();
@@ -56,6 +57,30 @@ class LifeScope {
     _state = ValueNotifier<AppLifecycleState?>(_binding.lifecycleState);
     _observer = _Observer(this);
     _binding.addObserver(_observer);
+  }
+
+  /// The [LifeScope] from the closest [LifeScopeProvider] above [context].
+  ///
+  /// Throws if there is no provider. Use [maybeOf] to get `null` instead.
+  static LifeScope of(BuildContext context) {
+    final scope = maybeOf(context);
+    if (scope == null) {
+      throw FlutterError.fromParts([
+        ErrorSummary('LifeScope.of() called with no LifeScopeProvider above.'),
+        ErrorHint(
+          'Wrap your app in a LifeScopeProvider, for example '
+          'runApp(LifeScopeProvider(child: MyApp())).',
+        ),
+        context.describeElement('The context used was'),
+      ]);
+    }
+    return scope;
+  }
+
+  /// The [LifeScope] from the closest [LifeScopeProvider] above [context],
+  /// or `null` if there is none.
+  static LifeScope? maybeOf(BuildContext context) {
+    return LifeScopeProvider.maybeOf(context);
   }
 
   /// How long an async callback may delay the next callback of the same
