@@ -203,3 +203,24 @@ final response = await tester.binding.handleRequestAppExit();
 ```
 
 Design notes are in [doc/architecture.md](https://github.com/ebrahimmansur/lifescope/blob/main/doc/architecture.md).
+
+## Found a bug?
+
+Please open an issue on
+[GitHub](https://github.com/ebrahimmansur/lifescope/issues). It helps a lot
+if you include:
+
+- your Flutter version (`flutter --version`)
+- the platform and OS version
+- whether it happens on a real device or a simulator, since lifecycle
+  behavior can differ between the two
+- what you expected and what actually happened
+- a small snippet or repo that shows the problem
+
+## Contributing
+
+Contributions are welcome, big or small. Small fixes can go straight to a
+pull request. For anything larger, like new API or a change in behavior,
+please open an issue first so we can talk it through before you spend time
+on it. More details are in
+[CONTRIBUTING.md](https://github.com/ebrahimmansur/lifescope/blob/main/CONTRIBUTING.md).
