@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import 'exit_coordinator.dart';
 import 'subscription.dart';
 import 'transitions.dart';
 
@@ -65,6 +67,8 @@ class LifeScope {
   late final _Observer _observer;
   late final ValueNotifier<AppLifecycleState?> _state;
   final List<_Listener> _listeners = [];
+  late final ExitCoordinator _exit =
+      ExitCoordinator(onError: _reportCallbackError);
   bool _disposed = false;
 
   /// The current lifecycle state, or `null` if the platform has not
@@ -126,6 +130,35 @@ class LifeScope {
     return subscription;
   }
 
+  /// Lets [onExitRequested] veto a request to close the application.
+  ///
+  /// Exit requests come from the platform when the user tries to close a
+  /// desktop app (Windows, macOS and Linux), or from
+  /// `ServicesBinding.instance.exitApplication(AppExitType.cancelable)`.
+  /// Mobile and web platforms do not send them. They are not sent when the
+  /// process is killed either.
+  ///
+  /// Guards are asked one at a time, in the order they were added. The
+  /// first guard to return [AppExitResponse.cancel] keeps the app open and
+  /// the remaining guards are not asked. This lets a guard show a
+  /// confirmation dialog without another dialog popping up after it.
+  ///
+  /// A guard that throws is reported and counts as
+  /// [AppExitResponse.exit], so a bug can never stop the user from closing
+  /// the app. If [timeout] is set and the guard has not answered in time,
+  /// [onTimeout] is used instead. There is no timeout by default because a
+  /// guard may be waiting for the user to answer a dialog.
+  ///
+  /// Call [LifeScopeSubscription.cancel] to remove the guard.
+  LifeScopeSubscription guardExit(
+    ExitGuardCallback onExitRequested, {
+    Duration? timeout,
+    AppExitResponse onTimeout = AppExitResponse.exit,
+  }) {
+    _checkNotDisposed();
+    return _exit.add(onExitRequested, timeout: timeout, onTimeout: onTimeout);
+  }
+
   /// Stops observing the lifecycle and cancels every subscription.
   ///
   /// The scope cannot be used after this.
@@ -133,6 +166,7 @@ class LifeScope {
     if (_disposed) return;
     _disposed = true;
     _binding.removeObserver(_observer);
+    _exit.dispose();
     for (final listener in List.of(_listeners)) {
       listener.subscription.cancel();
     }
@@ -186,6 +220,9 @@ class _Observer with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _scope._handleStateChange(state);
   }
+
+  @override
+  Future<AppExitResponse> didRequestAppExit() => _scope._exit.requestExit();
 }
 
 class _Listener {
