@@ -14,6 +14,9 @@ typedef LifecycleStateCallback = FutureOr<void> Function(
   AppLifecycleState state,
 );
 
+/// Receives errors thrown by lifecycle callbacks and exit guards.
+typedef LifeScopeErrorHandler = void Function(Object error, StackTrace stack);
+
 /// Coordinates application lifecycle callbacks for any number of
 /// independent listeners.
 ///
@@ -36,13 +39,29 @@ typedef LifecycleStateCallback = FutureOr<void> Function(
 /// guarantee that asynchronous work started in a callback will complete.
 class LifeScope {
   /// Creates a scope and starts observing the application lifecycle.
-  LifeScope() : _binding = WidgetsBinding.instance {
+  ///
+  /// [callbackTimeout] limits how long a listener's async callback can hold
+  /// back that listener's next callback. When it runs out, a
+  /// [TimeoutException] is reported and the next callback runs anyway.
+  ///
+  /// Errors thrown by callbacks go to [onError]. By default they are
+  /// reported with [FlutterError.reportError].
+  LifeScope({
+    this.callbackTimeout = const Duration(seconds: 5),
+    LifeScopeErrorHandler? onError,
+  })  : _binding = WidgetsBinding.instance,
+        _onError = onError {
     _state = ValueNotifier<AppLifecycleState?>(_binding.lifecycleState);
     _observer = _Observer(this);
     _binding.addObserver(_observer);
   }
 
+  /// How long an async callback may delay the next callback of the same
+  /// listener. `null` waits forever.
+  final Duration? callbackTimeout;
+
   final WidgetsBinding _binding;
+  final LifeScopeErrorHandler? _onError;
   late final _Observer _observer;
   late final ValueNotifier<AppLifecycleState?> _state;
   final List<_Listener> _listeners = [];
@@ -90,7 +109,10 @@ class LifeScope {
     });
     listener = _Listener(
       subscription: subscription,
-      queue: SerialQueue(onError: _reportCallbackError),
+      queue: SerialQueue(
+        onError: _reportCallbackError,
+        timeout: callbackTimeout,
+      ),
       onResume: onResume,
       onInactive: onInactive,
       onHide: onHide,
@@ -135,6 +157,11 @@ class LifeScope {
   }
 
   void _reportCallbackError(Object error, StackTrace stack) {
+    final onError = _onError;
+    if (onError != null) {
+      onError(error, stack);
+      return;
+    }
     FlutterError.reportError(FlutterErrorDetails(
       exception: error,
       stack: stack,

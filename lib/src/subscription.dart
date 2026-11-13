@@ -44,12 +44,19 @@ typedef QueueTask = FutureOr<void> Function();
 /// A task that completes synchronously runs right away, inside [add]. A task
 /// that returns a future holds back the following tasks until it completes.
 /// Errors are passed to [onError] and never stop the queue.
+///
+/// If [timeout] is set, the queue waits at most that long for an async task.
+/// It then reports a [TimeoutException] and moves on. The slow task is not
+/// cancelled, the queue just stops waiting for it.
 class SerialQueue {
   /// Creates an empty queue.
-  SerialQueue({required this.onError});
+  SerialQueue({required this.onError, this.timeout});
 
   /// Called with any error thrown by a task.
   final void Function(Object error, StackTrace stack) onError;
+
+  /// How long to wait for an async task before moving on.
+  final Duration? timeout;
 
   final Queue<QueueTask> _pending = Queue<QueueTask>();
   bool _busy = false;
@@ -83,7 +90,9 @@ class SerialQueue {
         continue;
       }
       if (result is Future<void>) {
-        result.then<void>((_) {}, onError: onError).whenComplete(_drain);
+        final timeout = this.timeout;
+        final pending = timeout == null ? result : result.timeout(timeout);
+        pending.then<void>((_) {}, onError: onError).whenComplete(_drain);
         return;
       }
     }

@@ -144,6 +144,72 @@ void main() {
     expect(log, isEmpty);
   });
 
+  group('errors', () {
+    late List<Object> errors;
+
+    void startWithErrors(WidgetTester tester) {
+      errors = [];
+      moveTo(tester, AppLifecycleState.resumed);
+      scope = LifeScope(
+        callbackTimeout: const Duration(seconds: 1),
+        onError: (error, _) => errors.add(error),
+      );
+      addTearDown(scope.dispose);
+    }
+
+    testWidgets('a throwing callback does not affect other listeners',
+        (tester) async {
+      startWithErrors(tester);
+      final log = <String>[];
+      scope
+        ..listen(onHide: () => throw StateError('boom'))
+        ..listen(onHide: () => log.add('hide'));
+
+      moveTo(tester, AppLifecycleState.hidden);
+
+      expect(log, ['hide']);
+      expect(errors.single, isStateError);
+    });
+
+    testWidgets('async errors are reported too', (tester) async {
+      startWithErrors(tester);
+      scope.listen(onHide: () async => throw StateError('boom'));
+
+      moveTo(tester, AppLifecycleState.hidden);
+      await tester.pump();
+
+      expect(errors.single, isStateError);
+    });
+
+    testWidgets('a stuck callback times out and the queue moves on',
+        (tester) async {
+      startWithErrors(tester);
+      final log = <String>[];
+      scope.listen(
+        onHide: () => Completer<void>().future,
+        onShow: () => log.add('show'),
+      );
+
+      moveTo(tester, AppLifecycleState.hidden);
+      moveTo(tester, AppLifecycleState.inactive);
+      expect(log, isEmpty);
+
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(log, ['show']);
+      expect(errors.single, isA<TimeoutException>());
+    });
+
+    testWidgets('errors go to FlutterError by default', (tester) async {
+      start(tester);
+      scope.listen(onHide: () => throw StateError('boom'));
+
+      moveTo(tester, AppLifecycleState.hidden);
+
+      expect(tester.takeException(), isStateError);
+    });
+  });
+
   testWidgets('dispose cancels every subscription', (tester) async {
     start(tester);
     final sub = scope.listen(onHide: () {});

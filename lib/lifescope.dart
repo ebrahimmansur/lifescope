@@ -2,5 +2,9 @@
 library;
 
 export 'src/lifescope.dart'
-    show LifeScope, LifecycleCallback, LifecycleStateCallback;
+    show
+        LifeScope,
+        LifeScopeErrorHandler,
+        LifecycleCallback,
+        LifecycleStateCallback;
 export 'src/subscription.dart' show LifeScopeSubscription;
