@@ -4,6 +4,7 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import 'background_time.dart';
 import 'exit_coordinator.dart';
 import 'subscription.dart';
 import 'transitions.dart';
@@ -49,11 +50,22 @@ class LifeScope {
   ///
   /// Errors thrown by callbacks go to [onError]. By default they are
   /// reported with [FlutterError.reportError].
+  ///
+  /// On iOS, when [extendBackgroundTime] is true, the scope asks the system
+  /// for extra background time while async `onHide`, `onPause` or `onDetach`
+  /// work is still running. Without it, iOS may suspend the app a few
+  /// seconds after it leaves the foreground, halfway through a save. On
+  /// other platforms this flag has no effect.
   LifeScope({
     this.callbackTimeout = const Duration(seconds: 5),
+    bool extendBackgroundTime = true,
     LifeScopeErrorHandler? onError,
   })  : _binding = WidgetsBinding.instance,
         _onError = onError {
+    _backgroundTime = BackgroundTimeKeeper(
+      enabled: extendBackgroundTime,
+      onError: _reportCallbackError,
+    );
     _state = ValueNotifier<AppLifecycleState?>(_binding.lifecycleState);
     _observer = _Observer(this);
     _binding.addObserver(_observer);
@@ -108,6 +120,7 @@ class LifeScope {
 
   final WidgetsBinding _binding;
   final LifeScopeErrorHandler? _onError;
+  late final BackgroundTimeKeeper _backgroundTime;
   late final _Observer _observer;
   late final ValueNotifier<AppLifecycleState?> _state;
   final List<_Listener> _listeners = [];
@@ -214,6 +227,7 @@ class LifeScope {
     for (final listener in List.of(_listeners)) {
       listener.subscription.cancel();
     }
+    _backgroundTime.dispose();
     _state.dispose();
   }
 
@@ -228,7 +242,7 @@ class LifeScope {
     var from = previous;
     for (final to in steps) {
       for (final listener in listeners) {
-        listener.dispatch(from, to);
+        listener.dispatch(from, to, _backgroundTime);
       }
       from = to;
     }
@@ -294,12 +308,25 @@ class _Listener {
   final LifecycleCallback? onDetach;
   final LifecycleStateCallback? onStateChange;
 
-  void dispatch(AppLifecycleState? from, AppLifecycleState to) {
+  void dispatch(
+    AppLifecycleState? from,
+    AppLifecycleState to,
+    BackgroundTimeKeeper backgroundTime,
+  ) {
     if (!subscription.isActive) return;
+
+    // Work started on the way to the background may need extra time on iOS.
+    final leaving = to == AppLifecycleState.hidden ||
+        to == AppLifecycleState.paused ||
+        to == AppLifecycleState.detached;
+    void add(LifecycleCallback task) {
+      queue.add(leaving ? () => backgroundTime.run(task) : task);
+    }
+
     final callback = _callbackFor(from, to);
-    if (callback != null) queue.add(callback);
+    if (callback != null) add(callback);
     final onStateChange = this.onStateChange;
-    if (onStateChange != null) queue.add(() => onStateChange(to));
+    if (onStateChange != null) add(() => onStateChange(to));
   }
 
   LifecycleCallback? _callbackFor(
