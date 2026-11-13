@@ -1,6 +1,6 @@
 name: lifescope
 description: Handle app lifecycle events per feature in Flutter. Independent listeners, ordered async callbacks, iOS background time and desktop exit guards.
-version: 0.2.0
+version: 0.1.0
 repository: https://github.com/ebrahimmansur/lifescope
 issue_tracker: https://github.com/ebrahimmansur/lifescope/issues
 topics:
