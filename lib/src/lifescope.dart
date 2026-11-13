@@ -83,6 +83,25 @@ class LifeScope {
     return LifeScopeProvider.maybeOf(context);
   }
 
+  /// Whether the current platform sends exit requests to [guardExit].
+  ///
+  /// True on Windows, macOS and Linux. False on Android, iOS and the web,
+  /// where the OS closes apps without asking. There, save work in `onHide`
+  /// instead, and use `PopScope` to handle the Android back button.
+  static bool get exitRequestsSupported {
+    if (kIsWeb) return false;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.windows ||
+      TargetPlatform.macOS ||
+      TargetPlatform.linux =>
+        true,
+      TargetPlatform.android ||
+      TargetPlatform.iOS ||
+      TargetPlatform.fuchsia =>
+        false,
+    };
+  }
+
   /// How long an async callback may delay the next callback of the same
   /// listener. `null` waits forever.
   final Duration? callbackTimeout;
@@ -160,8 +179,8 @@ class LifeScope {
   /// Exit requests come from the platform when the user tries to close a
   /// desktop app (Windows, macOS and Linux), or from
   /// `ServicesBinding.instance.exitApplication(AppExitType.cancelable)`.
-  /// Mobile and web platforms do not send them. They are not sent when the
-  /// process is killed either.
+  /// Mobile and web platforms do not send them (see [exitRequestsSupported]).
+  /// They are not sent when the process is killed either.
   ///
   /// Guards are asked one at a time, in the order they were added. The
   /// first guard to return [AppExitResponse.cancel] keeps the app open and

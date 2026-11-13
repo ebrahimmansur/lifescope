@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lifescope/lifescope.dart';
 
@@ -16,6 +17,22 @@ void main() {
   Future<AppExitResponse> requestExit(WidgetTester tester) {
     return tester.binding.handleRequestAppExit();
   }
+
+  test('exit requests are only supported on desktop', () {
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final expected = {
+      TargetPlatform.windows: true,
+      TargetPlatform.macOS: true,
+      TargetPlatform.linux: true,
+      TargetPlatform.android: false,
+      TargetPlatform.iOS: false,
+      TargetPlatform.fuchsia: false,
+    };
+    for (final MapEntry(key: platform, value: supported) in expected.entries) {
+      debugDefaultTargetPlatformOverride = platform;
+      expect(LifeScope.exitRequestsSupported, supported, reason: '$platform');
+    }
+  });
 
   testWidgets('exits when there are no guards', (tester) async {
     start();
