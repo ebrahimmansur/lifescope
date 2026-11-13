@@ -118,11 +118,61 @@ Confirmed Flutter behaviour:
   callbacks. `detached` is not a reliable "about to die" signal.
 - On web, `hidden`/`paused` follow page visibility. Closing the tab gives no
   chance to run async work.
+- On Android and iOS the embedder sends single states over
+  `flutter/lifecycle`. `ServicesBinding._generateStateTransitions` fills in
+  the steps in between before any observer is called. So in production,
+  `expandTransition` only ever sees single steps. It matters when
+  `handleAppLifecycleStateChanged` is called directly, as tests do.
+- `detached → paused` is a valid platform transition on Android, when the
+  engine starts with no visible activity. Flutter still walks
+  `resumed → inactive → hidden → paused` to get there, so `onResume` fires
+  even though nothing was shown. lifescope matches this rather than
+  second-guessing the framework.
+- Short interruptions (permission dialogs, Face ID, Control Center,
+  split-screen focus) only move between `resumed` and `inactive`.
 
 lifescope does not change any of this. It only organises who gets told.
+The one exception is iOS background time, below.
+
+## iOS background time
+
+iOS suspends an app a few seconds after it leaves the foreground. An async
+checkpoint in `onHide` can freeze halfway and only finish when the user
+comes back, if at all. `UIApplication.beginBackgroundTask` asks for more
+time, usually about 30 seconds.
+
+This is the only native code in the package (`ios/`, a Swift plugin of
+about 50 lines). Every other platform stays pure Dart.
+
+- `BackgroundTimeKeeper` (`lib/src/background_time.dart`) wraps callbacks
+  for steps into `hidden`, `paused` and `detached`. A sync callback costs
+  nothing. When a callback returns a future, the keeper counts it as
+  pending until it completes.
+- The first pending callback sends `begin` over
+  `lifescope/background_time`, and the last one to finish sends `end`. The
+  count is static, because the background task belongs to the process and
+  not to one `LifeScope`. Each keeper also tracks its own share, so
+  disposing one scope cannot end a task another one still needs.
+- The hold lasts until the real future completes, not until
+  `callbackTimeout`. The timeout only decides when the same listener's next
+  callback may start.
+- If iOS ends the time early, the plugin sends `expired`. Keepers with
+  pending work report a `TimeoutException`. The next callback that needs
+  time starts a new task.
+- Channel errors such as `MissingPluginException` are ignored. With no
+  plugin the package behaves exactly as before, just without extra time.
+
+Android has no equivalent API. Long work there belongs in WorkManager or a
+foreground service, which is outside this package's scope.
 
 ## Testing strategy
 
+- Mobile scenarios sent through the real `flutter/lifecycle` channel:
+  interruptions, home screen and back, the back button, background engine
+  start, and cold start.
+- Background time tested against a mocked channel with
+  `TargetPlatformVariant`, covering iOS only, sync and async callbacks,
+  overlap, expiry, a missing plugin, and several scopes.
 - Unit tests for `expandTransition` and `SerialQueue`, covering ordering,
   re-entrancy, errors and closing.
 - Widget tests that drive the real binding with

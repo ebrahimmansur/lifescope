@@ -13,6 +13,8 @@ at the root of the app.
 - Sync or async callbacks. Each listener's callbacks run in order, and a
   slow listener never holds up the others.
 - Errors and stuck callbacks are isolated and reported.
+- On iOS, extra background time is requested automatically while an
+  async `onHide`/`onPause` save is still running.
 - Desktop exit requests handled by a list of guards, where the first veto
   wins.
 - Widgets that subscribe on mount and clean up on dispose.
@@ -127,6 +129,8 @@ Or, outside of widgets, `lifecycle.guardExit(...)`.
 
 ### Exit guards
 
+- On Android and iOS, also save in `onHide`, because guards are never asked
+  there.
 - Exit requests are only sent on Windows, macOS and Linux, when the user
   closes the window or the app calls
   `ServicesBinding.instance.exitApplication(AppExitType.cancelable)`.
@@ -137,13 +141,56 @@ Or, outside of widgets, `lifecycle.guardExit(...)`.
 - `timeout` and `onTimeout` can be set per guard. There is no default timeout,
   because a guard may be waiting for a dialog.
 
-## Limits
+## Platform behavior
 
-Lifecycle callbacks are best effort. Being hidden is not the same as being
-terminated, and the OS can kill a hidden app without any warning. A force
-quit or a crash calls nothing. Save important state early and keep
-`onHide`/`onPause` work short. Do not rely on async work finishing after the
-app goes to the background.
+Lifecycle callbacks are best effort everywhere. Being hidden is not the
+same as being terminated, and a force quit or a crash calls nothing. Save
+important state in `onHide` and keep that work short.
+
+### Android
+
+- **Process death.** Once the app is in the background, Android can kill
+  the process at any time with no further callback. `onDetach` is not a
+  reliable "about to die" signal.
+- **Coming back after process death** is a cold start, not `onShow`. Restore
+  state at startup, or use Flutter's `RestorationMixin`.
+- **Back button on the root route** finishes the activity. You get
+  `onInactive`, `onHide`, `onPause` and `onDetach`. To stop it, use
+  `PopScope`. Exit guards do not run on Android.
+- **Permission dialogs and multi-window.** A system dialog or losing focus
+  in split screen only makes the app inactive. Picture-in-picture is also
+  visible but inactive. None of these call `onHide`.
+- **Starting in the background.** When the engine starts without a visible
+  activity, for example for a push message, Flutter reports `resumed`,
+  `inactive`, `hidden`, `paused` in quick succession. This is Flutter's own
+  behavior and lifescope passes it on unchanged.
+
+### iOS
+
+- **Background time.** iOS suspends an app a few seconds after it leaves the
+  foreground. While an async `onHide`, `onPause` or `onDetach` callback is
+  still running, lifescope holds a `UIApplication` background task, which
+  usually extends this to about 30 seconds. When iOS ends the time early, a
+  `TimeoutException` is reported through `onError`. Turn this off with
+  `LifeScope(extendBackgroundTime: false)`.
+- **Short interruptions** like Control Center, Notification Center, an
+  incoming call banner, Face ID or the app switcher only make the app
+  inactive. Use `onHide`/`onShow` for "the user left", not `onInactive`.
+- **No exit requests.** iOS apps are never asked before closing. Swiping the
+  app away from the switcher kills it with no callback.
+
+### Desktop
+
+- Hiding or minimizing the window gives `onHide`. Closing it sends an exit
+  request to your guards first (see above).
+
+### Web
+
+- `onHide`/`onShow` follow page visibility. Closing the tab gives no chance
+  to run async work, and exit guards do not run.
+
+Use `LifeScope.exitRequestsSupported` to check whether guards will ever be
+asked on the current platform.
 
 ## Testing
 
